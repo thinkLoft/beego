@@ -39,7 +39,6 @@ mongoose.connect(
 
 // A GET route for scraping the echoJS website
 app.get("/scrape", function(req, res) {
-  console.log("Scrape!");
   // First, we grab the body of the html with axios
   axios.get("https://www.autoadsja.com/search.asp").then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
@@ -62,17 +61,18 @@ app.get("/scrape", function(req, res) {
         .children("a")
         .children("img")
         .attr("src");
-      console.log(result.title);
-      // // Create a new Article using the `result` object built from scraping
-      // db.Article.create(result)
-      //   .then(function(dbArticle) {
-      //     // View the added result in the console
-      //     console.log(dbArticle);
-      //   })
-      //   .catch(function(err) {
-      //     // If an error occurred, send it to the client
-      //     return res.json(err);
-      //   });
+      result.price = $(this)
+        .children(".description")
+        .children("span")
+        .text()
+        .trim()
+        .replace(/[^0-9]/g, "");
+
+      // Create a new Article using the `result` object built from scraping
+      db.Article.create(result).catch(function(err) {
+        // If an error occurred, send it to the client
+        return res.json(err);
+      });
     });
 
     // If we were able to successfully scrape and save an Article, send a message to the client
@@ -132,6 +132,66 @@ app.post("/articles/:id", function(req, res) {
       // If an error occurred, send it to the client
       res.json(err);
     });
+});
+
+// Route for deleting all Articles from the db
+app.get("/clear", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Article.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// // Route for getting all Articles from the db
+app.get("/crawl", function(req, res) {
+  axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
+    // Then, we load that into cheerio and save it to $ for a shorthand selector
+    var $ = cheerio.load(response.data, { xmlMode: true });
+
+    $("item").each(function(i, element) {
+      // Save an empty result object
+      var result = {};
+
+      // Add the text and href of every link, and save them as properties of the result object
+      result.link = $(this)
+        .children("link")
+        .text();
+      result.title = $(this)
+        .children("title")
+        .text();
+      result.img = $(this)
+        .children("description")
+        .text();
+      // Create a new CRAWLER LIST using the `result` object built from scraping
+      db.Feed.create(result)
+        .then(function(dbArticle) {
+          // View the added result in the console
+          console.log(dbArticle);
+        })
+        .catch(function(err) {
+          // If an error occurred, send it to the client
+          return res.json(err);
+        });
+    });
+
+    // If we were able to successfully scrape and save an Article, send a message to the client
+    // Grab every URL in the feed collection
+    db.Feed.find({})
+      .then(function(dbArticle) {
+        // If we were able to successfully find Articles, send them back to the client
+        res.json(dbArticle);
+      })
+      .catch(function(err) {
+        // If an error occurred, send it to the client
+        res.json(err);
+      });
+  });
 });
 
 // Start the server

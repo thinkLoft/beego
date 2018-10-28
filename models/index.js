@@ -3,5 +3,6 @@
 module.exports = {
   Article: require("./Article"),
   Note: require("./Note"),
-  Feed: require("./feed")
+  Feed: require("./feed"),
+  Ads: require("./Ads")
 };

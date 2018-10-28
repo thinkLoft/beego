@@ -12,13 +12,13 @@ var AdsSchema = new Schema({
     required: true
   },
   // `link` is required and of type String
-  link: {
+  description: {
     type: String,
     required: true
   },
   // `title` is required and of type String
   img: {
-    type: String,
+    type: Array,
     required: true
   },
   // `link` is required and of type interger
@@ -26,12 +26,25 @@ var AdsSchema = new Schema({
     type: Number,
     required: true
   },
-  // `note` is an object that stores a Note id
-  // The ref property links the ObjectId to the Note model
-  // This allows us to populate the Article with an associated Note
-  note: {
-    type: Schema.Types.ObjectId,
-    ref: "Note"
+  contactNumber: {
+    type: Number,
+    required: true
+  },
+  year: {
+    type: Number,
+    required: true
+  },
+  make: {
+    type: String,
+    require: true
+  },
+  model: {
+    type: String,
+    require: true
+  },
+  parish: {
+    type: String,
+    require: true
   }
 });
 

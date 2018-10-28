@@ -304,7 +304,8 @@ app.get("/scrapeAds", function(req, res) {
           );
           var contact = $(".contact_details")
             .text()
-            .replace(/[^0-9.-]+/g, "");
+            .replace(/[^0-9]+/g, "")
+            .substring(0, 11);
 
           // Get Features for description
           var features = [];
@@ -314,6 +315,8 @@ app.get("/scrapeAds", function(req, res) {
           $(".per-detail > ul > li").each(function(i) {
             features.push($(this).text());
           });
+
+          features.push($(".contact_details").text());
 
           var description = "";
           features.forEach(function(element) {

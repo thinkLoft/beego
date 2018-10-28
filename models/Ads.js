@@ -27,7 +27,7 @@ var AdsSchema = new Schema({
     required: true
   },
   contactNumber: {
-    type: String,
+    type: Number,
     required: true
   },
   year: {

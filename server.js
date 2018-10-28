@@ -57,6 +57,8 @@ async function postItem(req) {
     // setTimeout(function() {}, 1000);
   }, user);
   await page.waitForNavigation();
+  req.forEach(async function(i, element) {});
+
   await page.focus("#ad_cat_id");
   await page.keyboard.press("ArrowDown", { delay: 50 });
   await page.evaluate(() => {
@@ -64,7 +66,7 @@ async function postItem(req) {
   });
   await page.waitForNavigation();
   await page.evaluate(req => {
-    // $(".upload-flash-bypass > a").click();
+    $(".upload-flash-bypass > a").click();
     $("#cp_contact_number").val(req[1].contactNumber);
     $("#cp_price").val(req[1].price);
     $("#cp_price").val(req[1].price);
@@ -78,15 +80,25 @@ async function postItem(req) {
         req[1].price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
     );
     $("#post_content").val(req[1].description);
+    $("form#mainform").submit();
   }, req);
-  const fileInput = await page.$(
-    "#app-attachment-upload-container > .moxie-shim > input"
-  );
 
-  await fileInput.uploadFile(req[1].imgs[1]);
+  // const fileInput = await page.$(
+  //   "#app-attachment-upload-container > .moxie-shim > input"
+  // );
+  // await console.log(req[1].imgs[1]);
+  // // await fileInput.uploadFile(req[1].imgs[1]);
   // const fileInput2 = await page.$("#upload_2 > input");
   // await fileInput2.uploadFile(req[1].imgs[1]);
-  await console.log(page.url());
+  // await console.log(fileInput2);
+  // await console.log(page.url());
+  await page.waitForNavigation();
+  await page.evaluate(() => {
+    $("form#mainform").submit();
+  });
+  await page.waitForNavigation();
+  await page.goto("https://doubleupja.com/create-listing/");
+
   // await browser.close();
 }
 
@@ -301,7 +313,7 @@ app.get("/scrapeAds", function(req, res) {
     .then(function(dbArticle) {
       // var result = [];
 
-      dbArticle.slice(-100).forEach(function(i, element) {
+      dbArticle.slice(-10).forEach(function(i, element) {
         // result.push(i.link);
         axios.get(i.link).then(function(response) {
           // Then, we load that into cheerio and save it to $ for a shorthand selector

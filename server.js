@@ -390,9 +390,25 @@ app.get("/scrapeAds", function(req, res) {
         // Save an empty result object
         var result = {};
 
-        result.title = $(".price-tag > h1").text();
+        // crawled variables
+        var title = $(".price-tag > h1").text();
+        var price = $(".price-tag > h2")
+          .text()
+          .replace(/[^0-9.-]+/g, "");
+        // break Title into array of text
+        var ymm = title.split(" ");
+        var year = ymm[0];
+        var make = ymm[1];
+        var modelIndex = title.indexOf(make) + make.length + 1;
+        var model = title.substring(modelIndex).replace(/\$.*/g, "");
 
-        res.send(result);
+        // Update Results object
+        result.title = title;
+        result.price = price;
+        result.year = year;
+        result.make = make;
+        result.model = model;
+        result.price = res.send(result);
       });
     })
     .catch(function(err) {

@@ -8,6 +8,9 @@ var mongoose = require("mongoose");
 var axios = require("axios");
 var cheerio = require("cheerio");
 
+// Our Puppeteer
+const puppeteer = require("puppeteer");
+
 // Require all models
 var db = require("./models");
 
@@ -34,6 +37,73 @@ mongoose.connect(
   MONGODB_URI,
   { useNewUrlParser: true }
 );
+
+// Load Puppeteer browser
+async function postItem() {
+  var user = {
+    username: "automater",
+    password: "llipDR3x8S2DUHAnyo"
+  };
+  console.log(user);
+
+  const browser = await puppeteer.launch({
+    headless: false
+  });
+  const page = await browser.newPage();
+  await page.goto("https://doubleupja.com/login");
+  await page.evaluate(() => {
+    $("#login_username").val("automater");
+    $("#login_password").val("llipDR3x8S2DUHAnyo");
+    $("#login").click();
+  });
+  await page.goto("https://doubleupja.com/create-listing/");
+  await page.evaluate(() => {
+    $("#ad_cat_id").val("10");
+    document.getElementById("getcat").style.display = "block";
+    $("#getcat").click();
+  });
+  await console.log(page.url());
+  // await browser.close();
+}
+
+// AutoAds Scraper Function
+function scrapePage(page) {
+  axios.get(page).then(function(response) {
+    // Then, we load that into cheerio and save it to $ for a shorthand selector
+    var $ = cheerio.load(response.data);
+
+    // Now, we grab every h2 within an article tag, and do the following:
+    $(".thumbnail").each(function(i, element) {
+      // Save an empty result object
+      var result = {};
+
+      // Add the text and href of every link, and save them as properties of the result object
+      result.title = $(this)
+        .children(".description")
+        .children("h4")
+        .text();
+      result.link = $(this)
+        .children("a")
+        .attr("href");
+      result.img = $(this)
+        .children("a")
+        .children("img")
+        .attr("src");
+      result.price = $(this)
+        .children(".description")
+        .children("span")
+        .text()
+        .trim()
+        .replace(/[^0-9]/g, "");
+
+      // Create a new Article using the `result` object built from scraping
+      db.Article.create(result).catch(function(err) {
+        // If an error occurred, send it to the client
+        return res.json(err);
+      });
+    });
+  });
+}
 
 // Routes
 
@@ -179,19 +249,69 @@ app.get("/crawl", function(req, res) {
           return res.json(err);
         });
     });
-
-    // If we were able to successfully scrape and save an Article, send a message to the client
-    // Grab every URL in the feed collection
-    db.Feed.find({})
-      .then(function(dbArticle) {
-        // If we were able to successfully find Articles, send them back to the client
-        res.json(dbArticle);
-      })
-      .catch(function(err) {
-        // If an error occurred, send it to the client
-        res.json(err);
-      });
   });
+});
+
+// Route for deleting all Articles from the db
+app.get("/clearCrawl", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/feed", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/scrapeAds", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.find({})
+    .then(function(dbArticle) {
+      var result = [];
+
+      dbArticle.forEach(function(i, element) {
+        result.push(i.link);
+      });
+      res.json(result);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for deleting all Articles from the db
+app.get("/postItem", function(req, res) {
+  // postItem();
+  // // Grab every document in the Articles collection
+  // db.Feed.find({})
+  //   .then(function(dbArticle) {
+  //     // If we were able to successfully find Articles, send them back to the client
+  //     res.json(dbArticle);
+  //   })
+  //   .catch(function(err) {
+  //     // If an error occurred, send it to the client
+  //     res.json(err);
+  //   });
+  res.send("FinishedPosting");
 });
 
 // Start the server

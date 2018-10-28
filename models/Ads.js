@@ -17,7 +17,7 @@ var AdsSchema = new Schema({
     required: true
   },
   // `title` is required and of type String
-  img: {
+  imgs: {
     type: Array,
     required: true
   },

@@ -39,29 +39,53 @@ mongoose.connect(
 );
 
 // Load Puppeteer browser
-async function postItem() {
+async function postItem(req) {
   var user = {
     username: "automater",
     password: "llipDR3x8S2DUHAnyo"
   };
-  console.log(user);
 
   const browser = await puppeteer.launch({
     headless: false
   });
   const page = await browser.newPage();
-  await page.goto("https://doubleupja.com/login");
-  await page.evaluate(() => {
-    $("#login_username").val("automater");
-    $("#login_password").val("llipDR3x8S2DUHAnyo");
-    $("#login").click();
-  });
   await page.goto("https://doubleupja.com/create-listing/");
+  await page.evaluate(user => {
+    $("#login_username").val(user.username);
+    $("#login_password").val(user.password);
+    $("#login").click();
+    // setTimeout(function() {}, 1000);
+  }, user);
+  await page.waitForNavigation();
+  await page.focus("#ad_cat_id");
+  await page.keyboard.press("ArrowDown", { delay: 50 });
   await page.evaluate(() => {
-    $("#ad_cat_id").val("10");
-    document.getElementById("getcat").style.display = "block";
-    $("#getcat").click();
+    $("form#mainform").submit();
   });
+  await page.waitForNavigation();
+  await page.evaluate(req => {
+    // $(".upload-flash-bypass > a").click();
+    $("#cp_contact_number").val(req[1].contactNumber);
+    $("#cp_price").val(req[1].price);
+    $("#cp_price").val(req[1].price);
+    $("#cp_year").val(req[1].year);
+    $("#cp_make").val(req[1].make);
+    $("#cp_model").val(req[1].model);
+    $("#cp_region").val(req[1].parish);
+    $("#post_title").val(
+      req[1].title +
+        " - $" +
+        req[1].price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+    );
+    $("#post_content").val(req[1].description);
+  }, req);
+  const fileInput = await page.$(
+    "#app-attachment-upload-container > .moxie-shim > input"
+  );
+
+  await fileInput.uploadFile(req[1].imgs[1]);
+  // const fileInput2 = await page.$("#upload_2 > input");
+  // await fileInput2.uploadFile(req[1].imgs[1]);
   await console.log(page.url());
   // await browser.close();
 }
@@ -298,10 +322,10 @@ app.get("/scrapeAds", function(req, res) {
           var modelIndex = title.indexOf(make) + make.length + 1;
           var model = title.substring(modelIndex).replace(/\$.*/g, "");
 
-          var location = $(".per-detail > ul > li")[0].children[0].data.replace(
-            "Location: ",
-            ""
-          );
+          var location = $(".per-detail > ul > li")[0]
+            .children[0].data.replace("Location: ", "")
+            .replace(" ", "")
+            .replace(".", ". ");
           var contact = $(".contact_details")
             .text()
             .replace(/[^0-9]+/g, "")
@@ -362,17 +386,17 @@ app.get("/scrapeAds", function(req, res) {
 
 // Route for deleting all Articles from the db
 app.get("/postItem", function(req, res) {
-  // postItem();
-  // // Grab every document in the Articles collection
-  // db.Feed.find({})
-  //   .then(function(dbArticle) {
-  //     // If we were able to successfully find Articles, send them back to the client
-  //     res.json(dbArticle);
-  //   })
-  //   .catch(function(err) {
-  //     // If an error occurred, send it to the client
-  //     res.json(err);
-  //   });
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      // res.json(dbArticle);
+      postItem(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
   res.send("FinishedPosting");
 });
 

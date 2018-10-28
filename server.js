@@ -7,6 +7,8 @@ var mongoose = require("mongoose");
 // It works on the client and on the server
 var axios = require("axios");
 var cheerio = require("cheerio");
+var fs = require("fs");
+var request = require("request");
 
 // Our Puppeteer
 const puppeteer = require("puppeteer");
@@ -48,6 +50,7 @@ async function postItem(req) {
   const browser = await puppeteer.launch({
     headless: false
   });
+
   const page = await browser.newPage();
   await page.goto("https://doubleupja.com/create-listing/");
   await page.evaluate(user => {
@@ -57,49 +60,58 @@ async function postItem(req) {
     // setTimeout(function() {}, 1000);
   }, user);
   await page.waitForNavigation();
-  req.forEach(async function(i, element) {});
 
-  await page.focus("#ad_cat_id");
-  await page.keyboard.press("ArrowDown", { delay: 50 });
-  await page.evaluate(() => {
-    $("form#mainform").submit();
-  });
-  await page.waitForNavigation();
-  await page.evaluate(req => {
-    $(".upload-flash-bypass > a").click();
-    $("#cp_contact_number").val(req[1].contactNumber);
-    $("#cp_price").val(req[1].price);
-    $("#cp_price").val(req[1].price);
-    $("#cp_year").val(req[1].year);
-    $("#cp_make").val(req[1].make);
-    $("#cp_model").val(req[1].model);
-    $("#cp_region").val(req[1].parish);
-    $("#post_title").val(
-      req[1].title +
-        " - $" +
-        req[1].price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-    );
-    $("#post_content").val(req[1].description);
-    $("form#mainform").submit();
-  }, req);
+  for (let i of req) {
+    await page.focus("#ad_cat_id");
+    await page.keyboard.press("ArrowDown", { delay: 50 });
+    await page.evaluate(() => {
+      $("form#mainform").submit();
+    });
+    await page.waitForNavigation();
+    await page.evaluate(i => {
+      $(".upload-flash-bypass > a").click();
+      $("#cp_contact_number").val(i.contactNumber);
+      $("#cp_price").val(i.price);
+      $("#cp_price").val(i.price);
+      $("#cp_year").val(i.year);
+      $("#cp_make").val(i.make);
+      $("#cp_model").val(i.model);
+      $("#cp_region").val(i.parish);
+      $("#post_title").val(i.title);
+      $("#post_content").val(i.description);
+    }, i);
+    const fileInput = await page.$("#upload_1 > input");
+    await fileInput.uploadFile("RUC9JEHN.jpg");
+
+    await page.waitForNavigation();
+    await page.evaluate(() => {
+      $("form#mainform").submit();
+    });
+    await page.waitForNavigation();
+    await page.goto("https://doubleupja.com/create-listing/");
+  }
+  // await browser.close();
+  // ==================================================
+  // ==================================================
+  // ==================================================
 
   // const fileInput = await page.$(
   //   "#app-attachment-upload-container > .moxie-shim > input"
   // );
-  // await console.log(req[1].imgs[1]);
-  // // await fileInput.uploadFile(req[1].imgs[1]);
-  // const fileInput2 = await page.$("#upload_2 > input");
-  // await fileInput2.uploadFile(req[1].imgs[1]);
-  // await console.log(fileInput2);
-  // await console.log(page.url());
-  await page.waitForNavigation();
-  await page.evaluate(() => {
-    $("form#mainform").submit();
-  });
-  await page.waitForNavigation();
-  await page.goto("https://doubleupja.com/create-listing/");
+  // await console.log(i.imgs[1]);
+  // await fileInput.uploadFile(i.imgs[1]);
+}
 
-  // await browser.close();
+// Image Downloader
+function download(uri, filename, callback) {
+  request.head(uri, function(err, res, body) {
+    console.log("content-type:", res.headers["content-type"]);
+    console.log("content-length:", res.headers["content-length"]);
+
+    request(uri)
+      .pipe(fs.createWriteStream(filename))
+      .on("close", callback);
+  });
 }
 
 // Routes
@@ -313,7 +325,7 @@ app.get("/scrapeAds", function(req, res) {
     .then(function(dbArticle) {
       // var result = [];
 
-      dbArticle.slice(-10).forEach(function(i, element) {
+      dbArticle.slice(-100).forEach(function(i, element) {
         // result.push(i.link);
         axios.get(i.link).then(function(response) {
           // Then, we load that into cheerio and save it to $ for a shorthand selector
@@ -327,6 +339,9 @@ app.get("/scrapeAds", function(req, res) {
           var price = $(".price-tag > h2")
             .text()
             .replace(/[^0-9.-]+/g, "");
+          // Add Formatted price to Title
+          title +=
+            " - $" + price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
           var ymm = title.split(" "); // break Title into array of text
           var year = ymm[0];
@@ -336,8 +351,9 @@ app.get("/scrapeAds", function(req, res) {
 
           var location = $(".per-detail > ul > li")[0]
             .children[0].data.replace("Location: ", "")
-            .replace(" ", "")
+            .replace(/\s+/g, "")
             .replace(".", ". ");
+
           var contact = $(".contact_details")
             .text()
             .replace(/[^0-9]+/g, "")
@@ -358,6 +374,7 @@ app.get("/scrapeAds", function(req, res) {
           features.forEach(function(element) {
             description += element.toString();
             description += "\n";
+            description = +"\n Sourced from http://autoadsja.com";
           });
 
           // Get Images
@@ -389,6 +406,35 @@ app.get("/scrapeAds", function(req, res) {
 
       // Send Scraped result to the front
       res.send("Scrape Successful");
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/scrapImgs", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      // res.json(dbArticle);
+      dbArticle.slice(-2).forEach(function(i, element) {
+        console.log(i);
+        i.imgs.slice(-2).forEach(function(e, element) {
+          console.log(e);
+
+          var filename = e.replace(
+            "https://www.autoadsja.com/vehicleimages/",
+            ""
+          );
+          download(e, filename, function() {
+            console.log("download successful!");
+          });
+        });
+      });
+      res.send("imported img line 424");
     })
     .catch(function(err) {
       // If an error occurred, send it to the client

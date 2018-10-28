@@ -66,138 +66,6 @@ async function postItem() {
   // await browser.close();
 }
 
-// AutoAds Scraper Function
-// function scrapePage(page) {
-//   axios.get(page).then(function(response) {
-//     // Then, we load that into cheerio and save it to $ for a shorthand selector
-//     var $ = cheerio.load(response.data);
-
-//     var result = [];
-
-//     var title = $(".price-tag > h2").text();
-//     var ymm = title.split(" ");
-//     var year = ymm[0];
-//     var make = ymm[1];
-//     var modelIndex = title.indexOf(make) + make.length + 1;
-//     var model = title.substring(modelIndex).replace(/\$.*/g, "");
-//     var price = $(".price-tag > h2 > span")
-//       .text()
-//       .replace(/[^0-9.-]+/g, "");
-//     var id = window.location.pathname.replace("/", "");
-//     var imgs = [];
-//     var features = [];
-
-//     var location = $(".per-detail > ul > li")[0].innerText.replace(
-//       "Location: ",
-//       ""
-//     );
-//     var contact = $(".contact_details").text();
-
-//     features.push($(".vehicle-description").text());
-
-//     // Get Features
-//     $(".per-detail > ul > li").each(function(i) {
-//       features.push($(this).text());
-//     });
-
-//     // Get Images
-//     $(".product-images > .prod-box > a").each(function(i) {
-//       imgs.push($(this).attr("href"));
-//     });
-
-//     // Get Todays Date
-//     var getDate = function() {
-//       var today = new Date();
-//       var dd = today.getDate();
-//       var mm = today.getMonth() + 1; //January is 0!
-//       var yyyy = today.getFullYear();
-//       if (dd < 10) {
-//         dd = "0" + dd;
-//       }
-//       if (mm < 10) {
-//         mm = "0" + mm;
-//       }
-//       var day = mm + "/" + dd + "/" + yyyy;
-//       return day;
-//     };
-
-//     // Get Expiry Date
-//     var getDateAfter = function(days) {
-//       var dayAfter = new Date();
-//       dayAfter.setDate(dayAfter.getDate() + days);
-//       var dd = dayAfter.getDate();
-//       var mm = dayAfter.getMonth() + 1;
-//       var yyyy = dayAfter.getFullYear();
-//       var expiry = dd + "/" + mm + "/" + yyyy;
-//       return expiry;
-//     };
-
-//     var today = getDate();
-//     var expiry = getDateAfter(60);
-
-//     var slug = year + "-" + make + "-" + model + "-" + id;
-//     var adtag = location + "," + year + "," + make + "," + model;
-
-//     result.push({
-//       title: title,
-//       year: year,
-//       make: make,
-//       model: model,
-//       price: price,
-//       description: features.toString(),
-//       status: "publish",
-//       author: "6", //AutoAdsJa
-//       date: today,
-//       id: id,
-//       slug: slug,
-//       expire_date: expiry,
-//       duration: 180,
-//       total_cost: 0,
-//       // street: '39 Westminster Road',
-//       city: location,
-//       // zipcode: '',
-//       // state: '',
-//       country: "Jamaica",
-//       ad_cat: "cars",
-//       ad_tag: adtag,
-//       contact: contact,
-//       attachments: imgs.toString()
-//     });
-//     return result;
-
-//     // Now, we grab every h2 within an article tag, and do the following:
-//     // $(".thumbnail").each(function(i, element) {
-//     //   // Save an empty result object
-//     //   var result = {};
-
-//     //   // Add the text and href of every link, and save them as properties of the result object
-//     //   result.title = $(this)
-//     //     .children(".description")
-//     //     .children("h4")
-//     //     .text();
-//     //   result.link = $(this)
-//     //     .children("a")
-//     //     .attr("href");
-//     //   result.img = $(this)
-//     //     .children("a")
-//     //     .children("img")
-//     //     .attr("src");
-//     //   result.price = $(this)
-//     //     .children(".description")
-//     //     .children("span")
-//     //     .text()
-//     //     .trim()
-//     //     .replace(/[^0-9]/g, "");
-
-//     //   // Create a new Article using the `result` object built from scraping
-//     //   db.Article.create(result).catch(function(err) {
-//     //     // If an error occurred, send it to the client
-//     //     return res.json(err);
-//     //   });
-//     // });
-//   });
-// }
-
 // Routes
 
 // A GET route for scraping the echoJS website
@@ -386,7 +254,7 @@ app.get("/scrapeAds", function(req, res) {
       axios.get(dbArticle[1].link).then(function(response) {
         // Then, we load that into cheerio and save it to $ for a shorthand selector
         var $ = cheerio.load(response.data);
-        console.log(response.config.url);
+
         // Save an empty result object
         var result = {};
 
@@ -395,12 +263,41 @@ app.get("/scrapeAds", function(req, res) {
         var price = $(".price-tag > h2")
           .text()
           .replace(/[^0-9.-]+/g, "");
-        // break Title into array of text
-        var ymm = title.split(" ");
+
+        var ymm = title.split(" "); // break Title into array of text
         var year = ymm[0];
         var make = ymm[1];
         var modelIndex = title.indexOf(make) + make.length + 1;
         var model = title.substring(modelIndex).replace(/\$.*/g, "");
+
+        var location = $(".per-detail > ul > li")[0].children[0].data.replace(
+          "Location: ",
+          ""
+        );
+        var contact = $(".contact_details")
+          .text()
+          .replace(/[^0-9.-]+/g, "");
+
+        // Get Features for description
+        var features = [];
+
+        features.push($(".vehicle-description").text());
+
+        $(".per-detail > ul > li").each(function(i) {
+          features.push($(this).text());
+        });
+
+        var description = "";
+        features.forEach(function(element) {
+          description += element.toString();
+          description += "\n";
+        });
+
+        // Get Images
+        var imgs = [];
+        $(".product-images > .prod-box > a").each(function(i) {
+          imgs.push($(this).attr("href"));
+        });
 
         // Update Results object
         result.title = title;
@@ -408,7 +305,13 @@ app.get("/scrapeAds", function(req, res) {
         result.year = year;
         result.make = make;
         result.model = model;
-        result.price = res.send(result);
+        result.parish = location;
+        result.contactNumber = contact;
+        result.description = description;
+        result.imgs = imgs;
+        result.price = price;
+
+        res.send(result);
       });
     })
     .catch(function(err) {

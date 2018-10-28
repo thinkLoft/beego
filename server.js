@@ -125,6 +125,21 @@ app.get("/articles", function(req, res) {
     });
 });
 
+// Route for getting all Articles from the db
+app.get("/ads", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      console.log(dbArticle.length);
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
 // Route for grabbing a specific Article by id, populate it with it's note
 app.get("/articles/:id", function(req, res) {
   // Using the id passed in the id parameter, prepare a query that finds the matching one in our db...
@@ -227,6 +242,20 @@ app.get("/clearCrawl", function(req, res) {
     });
 });
 
+// Route for deleting all Articles from the db
+app.get("/clearAds", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
 // Route for getting all Articles from the db
 app.get("/feed", function(req, res) {
   // Grab every document in the Articles collection
@@ -248,71 +277,79 @@ app.get("/scrapeAds", function(req, res) {
     .then(function(dbArticle) {
       // var result = [];
 
-      dbArticle.forEach(function(i, element) {
+      dbArticle.slice(-100).forEach(function(i, element) {
         // result.push(i.link);
+        axios.get(i.link).then(function(response) {
+          // Then, we load that into cheerio and save it to $ for a shorthand selector
+          var $ = cheerio.load(response.data);
+
+          // Save an empty result object
+          var result = {};
+
+          // crawled variables
+          var title = $(".price-tag > h1").text();
+          var price = $(".price-tag > h2")
+            .text()
+            .replace(/[^0-9.-]+/g, "");
+
+          var ymm = title.split(" "); // break Title into array of text
+          var year = ymm[0];
+          var make = ymm[1];
+          var modelIndex = title.indexOf(make) + make.length + 1;
+          var model = title.substring(modelIndex).replace(/\$.*/g, "");
+
+          var location = $(".per-detail > ul > li")[0].children[0].data.replace(
+            "Location: ",
+            ""
+          );
+          var contact = $(".contact_details")
+            .text()
+            .replace(/[^0-9.-]+/g, "");
+
+          // Get Features for description
+          var features = [];
+
+          features.push($(".vehicle-description").text());
+
+          $(".per-detail > ul > li").each(function(i) {
+            features.push($(this).text());
+          });
+
+          var description = "";
+          features.forEach(function(element) {
+            description += element.toString();
+            description += "\n";
+          });
+
+          // Get Images
+          var imgs = [];
+          $(".product-images > .prod-box > a").each(function(i) {
+            imgs.push($(this).attr("href"));
+          });
+
+          // Update Results object
+          result.title = title;
+          result.price = price;
+          result.year = year;
+          result.make = make;
+          result.model = model;
+          result.parish = location;
+          result.contactNumber = contact;
+          result.description = description;
+          result.imgs = imgs;
+          result.price = price;
+
+          // Create a new Article using the `result` object built from scraping
+          db.Ads.create(result).catch(function(err) {
+            // If an error occurred, send it to the client
+            // return res.json(err);
+            console.log(err);
+          });
+        });
       });
-      axios.get(dbArticle[1].link).then(function(response) {
-        // Then, we load that into cheerio and save it to $ for a shorthand selector
-        var $ = cheerio.load(response.data);
 
-        // Save an empty result object
-        var result = {};
-
-        // crawled variables
-        var title = $(".price-tag > h1").text();
-        var price = $(".price-tag > h2")
-          .text()
-          .replace(/[^0-9.-]+/g, "");
-
-        var ymm = title.split(" "); // break Title into array of text
-        var year = ymm[0];
-        var make = ymm[1];
-        var modelIndex = title.indexOf(make) + make.length + 1;
-        var model = title.substring(modelIndex).replace(/\$.*/g, "");
-
-        var location = $(".per-detail > ul > li")[0].children[0].data.replace(
-          "Location: ",
-          ""
-        );
-        var contact = $(".contact_details")
-          .text()
-          .replace(/[^0-9.-]+/g, "");
-
-        // Get Features for description
-        var features = [];
-
-        features.push($(".vehicle-description").text());
-
-        $(".per-detail > ul > li").each(function(i) {
-          features.push($(this).text());
-        });
-
-        var description = "";
-        features.forEach(function(element) {
-          description += element.toString();
-          description += "\n";
-        });
-
-        // Get Images
-        var imgs = [];
-        $(".product-images > .prod-box > a").each(function(i) {
-          imgs.push($(this).attr("href"));
-        });
-
-        // Update Results object
-        result.title = title;
-        result.price = price;
-        result.year = year;
-        result.make = make;
-        result.model = model;
-        result.parish = location;
-        result.contactNumber = contact;
-        result.description = description;
-        result.imgs = imgs;
-        result.price = price;
-
-        res.send(result);
-      });
+      // Send Scraped result to the front
+      res.send("Scrape Successful");
     })
     .catch(function(err) {
       // If an error occurred, send it to the client

@@ -41,73 +41,94 @@ mongoose.connect(
 );
 
 // Load Puppeteer browser
-async function postItem(req) {
+async function postItem(i) {
   var user = {
     username: "automater",
     password: "llipDR3x8S2DUHAnyo"
   };
 
+  const makeSub = i.make.substring(0, 4);
+
   const browser = await puppeteer.launch({
-    headless: false
+    headless: false,
+    timeout: 150000,
+    networkIdleTimout: 150000
   });
 
   const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(60000);
+
   await page.goto("https://doubleupja.com/create-listing/");
   await page.evaluate(user => {
     $("#login_username").val(user.username);
     $("#login_password").val(user.password);
     $("#login").click();
-    // setTimeout(function() {}, 1000);
   }, user);
   await page.waitForNavigation();
 
-  for (let i of req) {
-    await page.focus("#ad_cat_id");
-    await page.keyboard.press("ArrowDown", { delay: 50 });
-    await page.evaluate(() => {
-      $("form#mainform").submit();
-    });
-    await page.waitForNavigation();
-    await page.evaluate(i => {
-      $(".upload-flash-bypass > a").click();
-      $("#cp_contact_number").val(i.contactNumber);
-      $("#cp_price").val(i.price);
-      $("#cp_price").val(i.price);
-      $("#cp_year").val(i.year);
-      $("#cp_make").val(i.make);
-      $("#cp_model").val(i.model);
-      $("#cp_region").val(i.parish);
-      $("#post_title").val(i.title);
-      $("#post_content").val(i.description);
-    }, i);
-    const fileInput = await page.$("#upload_1 > input");
-    await fileInput.uploadFile("RUC9JEHN.jpg");
+  await page.focus("#ad_cat_id");
+  await page.keyboard.press("ArrowDown", { delay: 50 });
+  await page.evaluate(() => {
+    $("form#mainform").submit();
+  });
+  await page.waitForNavigation();
+  await page.click(".upload-flash-bypass > a");
 
-    await page.waitForNavigation();
-    await page.evaluate(() => {
-      $("form#mainform").submit();
-    });
-    await page.waitForNavigation();
-    await page.goto("https://doubleupja.com/create-listing/");
+  await console.log(makeSub);
+  await page.type("#cp_make", makeSub);
+  await page.evaluate(i => {
+    $("#cp_contact_number").val(i.contactNumber);
+    $("#cp_price").val(i.price);
+    $("#cp_price").val(i.price);
+    $("#cp_year").val(i.year);
+    $("#cp_model").val(i.model);
+    $("#cp_region").val(i.parish);
+    $("#post_title").val(i.title);
+    $("#post_content").val(i.description);
+  }, i);
+
+  var count = 1;
+
+  // Run command for each image
+  async function processImgs(i) {
+    for (let e of i.imgs) {
+      console.log(e);
+      var uploadbtn = "#upload_" + count + " > input";
+      var filename = "images/";
+      filename += e.replace("https://www.autoadsja.com/vehicleimages/", "");
+      await download(e, filename, async function() {});
+
+      const fileInput = await page.$(uploadbtn);
+      await console.log(uploadbtn);
+      await fileInput.uploadFile(filename);
+
+      count++;
+    }
   }
-  // await browser.close();
-  // ==================================================
-  // ==================================================
-  // ==================================================
+  await processImgs(i);
+  // await page.waitForNavigation(); //TEMP
+  await setTimeout(async function() {
+    await page.evaluate(() => {
+      $("form#mainform").submit();
+    });
+  }, 3000);
 
-  // const fileInput = await page.$(
-  //   "#app-attachment-upload-container > .moxie-shim > input"
-  // );
-  // await console.log(i.imgs[1]);
-  // await fileInput.uploadFile(i.imgs[1]);
+  await page.waitForNavigation({});
+  // await page.evaluate(() => {
+  //   $("form#mainform").submit();
+  // });
+  // await page.waitForNavigation(); //TEMP
+  // await page.goto("https://doubleupja.com/create-listing/");
+  await page.evaluate(() => {
+    $("form#mainform").submit();
+  });
+  await page.waitForNavigation();
+  await browser.close();
 }
 
 // Image Downloader
 function download(uri, filename, callback) {
   request.head(uri, function(err, res, body) {
-    console.log("content-type:", res.headers["content-type"]);
-    console.log("content-length:", res.headers["content-length"]);
-
     request(uri)
       .pipe(fs.createWriteStream(filename))
       .on("close", callback);
@@ -115,6 +136,34 @@ function download(uri, filename, callback) {
 }
 
 // Routes
+
+// Route for deleting all Articles from the db
+app.get("/postItem", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(async function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      // res.json(dbArticle);
+      // await postItem(dbArticle[54]);
+      // await postItem(dbArticle[55]);
+      // await postItem(dbArticle[56]);
+      // await postItem(dbArticle[57]);
+      // await postItem(dbArticle[58]);
+      // await postItem(dbArticle[59]);
+      // await postItem(dbArticle[60]);
+      // await postItem(dbArticle[61]);
+      // await postItem(dbArticle[62]);
+      // await postItem(dbArticle[63]);
+      for (let i of dbArticle) {
+        await postItem(i);
+      }
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      console.log(err);
+    });
+  res.send("FinishedPosting");
+});
 
 // A GET route for scraping the echoJS website
 app.get("/scrape", function(req, res) {
@@ -420,42 +469,13 @@ app.get("/scrapImgs", function(req, res) {
     .then(function(dbArticle) {
       // If we were able to successfully find Articles, send them back to the client
       // res.json(dbArticle);
-      dbArticle.slice(-2).forEach(function(i, element) {
-        console.log(i);
-        i.imgs.slice(-2).forEach(function(e, element) {
-          console.log(e);
-
-          var filename = e.replace(
-            "https://www.autoadsja.com/vehicleimages/",
-            ""
-          );
-          download(e, filename, function() {
-            console.log("download successful!");
-          });
-        });
-      });
+      dbArticle.slice(-2).forEach(function(i, element) {});
       res.send("imported img line 424");
     })
     .catch(function(err) {
       // If an error occurred, send it to the client
       res.json(err);
     });
-});
-
-// Route for deleting all Articles from the db
-app.get("/postItem", function(req, res) {
-  // Grab every document in the Articles collection
-  db.Ads.find({})
-    .then(function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      // res.json(dbArticle);
-      postItem(dbArticle);
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-  res.send("FinishedPosting");
 });
 
 // Start the server

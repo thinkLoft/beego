@@ -85,6 +85,7 @@ async function postItem(i) {
     $("#cp_region").val(i.parish);
     $("#post_title").val(i.title);
     $("#post_content").val(i.description);
+    // console.log(i.description);
   }, i);
 
   var count = 1;
@@ -92,14 +93,14 @@ async function postItem(i) {
   // Run command for each image
   async function processImgs(i) {
     for (let e of i.imgs) {
-      console.log(e);
+      // console.log(e);
       var uploadbtn = "#upload_" + count + " > input";
       var filename = "images/";
       filename += e.replace("https://www.autoadsja.com/vehicleimages/", "");
       await download(e, filename, async function() {});
 
       const fileInput = await page.$(uploadbtn);
-      await console.log(uploadbtn);
+      // await console.log(uploadbtn);
       await fileInput.uploadFile(filename);
 
       count++;
@@ -135,25 +136,35 @@ function download(uri, filename, callback) {
   });
 }
 
+function checkFeed(result) {
+  db.Feed.find({ link: result.link }, function(err, docs) {
+    if (docs.length) {
+    } else {
+      db.Feed.create(result)
+        .then(function(dbArticle) {
+          console.log("Name added");
+        })
+        .catch(function(err) {
+          // If an error occurred, send it to the client
+          // return res.json(err);
+          console.log(err);
+        });
+    }
+  });
+}
+
+//============================================
+//============================================
+//============================================
 // Routes
+//============================================
+//============================================
 
 // Route for deleting all Articles from the db
 app.get("/postItem", function(req, res) {
   // Grab every document in the Articles collection
   db.Ads.find({})
     .then(async function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      // res.json(dbArticle);
-      // await postItem(dbArticle[54]);
-      // await postItem(dbArticle[55]);
-      // await postItem(dbArticle[56]);
-      // await postItem(dbArticle[57]);
-      // await postItem(dbArticle[58]);
-      // await postItem(dbArticle[59]);
-      // await postItem(dbArticle[60]);
-      // await postItem(dbArticle[61]);
-      // await postItem(dbArticle[62]);
-      // await postItem(dbArticle[63]);
       for (let i of dbArticle) {
         await postItem(i);
       }
@@ -296,9 +307,8 @@ app.get("/crawl", function(req, res) {
   axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data, { xmlMode: true });
-
+    var count;
     $("item").each(function(i, element) {
-      // Save an empty result object
       var result = {};
 
       // Add the text and href of every link, and save them as properties of the result object
@@ -311,17 +321,14 @@ app.get("/crawl", function(req, res) {
       result.img = $(this)
         .children("description")
         .text();
-      // Create a new CRAWLER LIST using the `result` object built from scraping
-      db.Feed.create(result)
-        .then(function(dbArticle) {
-          // View the added result in the console
-          console.log(dbArticle);
-        })
-        .catch(function(err) {
-          // If an error occurred, send it to the client
-          return res.json(err);
-        });
+
+      checkFeed(result, function(res) {
+        if (res) {
+          count++;
+        }
+      });
     });
+    res.send(count);
   });
 });
 
@@ -374,7 +381,7 @@ app.get("/scrapeAds", function(req, res) {
     .then(function(dbArticle) {
       // var result = [];
 
-      dbArticle.slice(-100).forEach(function(i, element) {
+      dbArticle.forEach(function(i, element) {
         // result.push(i.link);
         axios.get(i.link).then(function(response) {
           // Then, we load that into cheerio and save it to $ for a shorthand selector
@@ -423,7 +430,7 @@ app.get("/scrapeAds", function(req, res) {
           features.forEach(function(element) {
             description += element.toString();
             description += "\n";
-            description = +"\n Sourced from http://autoadsja.com";
+            // description = +"\n Sourced from http://autoadsja.com";
           });
 
           // Get Images

@@ -1,6 +1,7 @@
 var express = require("express");
 var logger = require("morgan");
 var mongoose = require("mongoose");
+const CronJob = require("cron").CronJob;
 
 // Our scraping tools
 // Axios is a promised-based http library, similar to jQuery's Ajax method
@@ -136,13 +137,91 @@ function download(uri, filename, callback) {
   });
 }
 
+function scrapeAds(link) {
+  axios.get(link).then(function(response) {
+    // Then, we load that into cheerio and save it to $ for a shorthand selector
+    var $ = cheerio.load(response.data);
+
+    // Save an empty result object
+    var result = {};
+
+    // crawled variables
+    var title = $(".price-tag > h1").text();
+    var price = $(".price-tag > h2")
+      .text()
+      .replace(/[^0-9.-]+/g, "");
+    // Add Formatted price to Title
+    title += " - $" + price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+    var ymm = title.split(" "); // break Title into array of text
+    var year = ymm[0];
+    var make = ymm[1];
+    var modelIndex = title.indexOf(make) + make.length + 1;
+    var model = title.substring(modelIndex).replace(/\$.*/g, "");
+
+    var location = $(".per-detail > ul > li")[0]
+      .children[0].data.replace("Location: ", "")
+      .replace(/\s+/g, "")
+      .replace(".", ". ");
+
+    var contact = $(".contact_details")
+      .text()
+      .replace(/[^0-9]+/g, "")
+      .substring(0, 11);
+
+    // Get Features for description
+    var features = [];
+
+    features.push($(".vehicle-description").text());
+
+    $(".per-detail > ul > li").each(function(i) {
+      features.push($(this).text());
+    });
+
+    features.push($(".contact_details").text());
+
+    var description = "";
+    features.forEach(function(element) {
+      description += element.toString();
+      description += "\n";
+      // description = +"\n Sourced from http://autoadsja.com";
+    });
+
+    // Get Images
+    var imgs = [];
+    $(".product-images > .prod-box > a").each(function(i) {
+      imgs.push($(this).attr("href"));
+    });
+
+    // Update Results object
+    result.title = title;
+    result.price = price;
+    result.year = year;
+    result.make = make;
+    result.model = model;
+    result.parish = location;
+    result.contactNumber = contact;
+    result.description = description;
+    result.imgs = imgs;
+    result.price = price;
+
+    // Create a new Article using the `result` object built from scraping
+    db.Ads.create(result).catch(function(err) {
+      // If an error occurred, send it to the client
+      console.log(err);
+    });
+  });
+}
+
 function checkFeed(result) {
   db.Feed.find({ link: result.link }, function(err, docs) {
     if (docs.length) {
     } else {
       db.Feed.create(result)
-        .then(function(dbArticle) {
+        .then(function(feedItem) {
           console.log("Name added");
+          console.log(feedItem);
+          scrapeAds(feedItem.link);
         })
         .catch(function(err) {
           // If an error occurred, send it to the client
@@ -152,6 +231,38 @@ function checkFeed(result) {
     }
   });
 }
+
+const job = new CronJob("0 */1 * * * *", function() {
+  axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
+    // Then, we load that into cheerio and save it to $ for a shorthand selector
+    var $ = cheerio.load(response.data, { xmlMode: true });
+
+    $("item").each(function(i, element) {
+      var result = {};
+
+      // Add the text and href of every link, and save them as properties of the result object
+      result.link = $(this)
+        .children("link")
+        .text();
+      result.title = $(this)
+        .children("title")
+        .text();
+      result.img = $(this)
+        .children("description")
+        .text();
+
+      checkFeed(result, function(res) {
+        if (res) {
+          count++;
+        }
+      });
+    });
+  });
+  console.log("checked for ads");
+});
+
+// Start Cron Job Automation
+job.start();
 
 //============================================
 //============================================
@@ -176,87 +287,13 @@ app.get("/postItem", function(req, res) {
   res.send("FinishedPosting");
 });
 
-// A GET route for scraping the echoJS website
-app.get("/scrape", function(req, res) {
-  // First, we grab the body of the html with axios
-  axios.get("https://www.autoadsja.com/search.asp").then(function(response) {
-    // Then, we load that into cheerio and save it to $ for a shorthand selector
-    var $ = cheerio.load(response.data);
-
-    // Now, we grab every h2 within an article tag, and do the following:
-    $(".thumbnail").each(function(i, element) {
-      // Save an empty result object
-      var result = {};
-
-      // Add the text and href of every link, and save them as properties of the result object
-      result.title = $(this)
-        .children(".description")
-        .children("h4")
-        .text();
-      result.link = $(this)
-        .children("a")
-        .attr("href");
-      result.img = $(this)
-        .children("a")
-        .children("img")
-        .attr("src");
-      result.price = $(this)
-        .children(".description")
-        .children("span")
-        .text()
-        .trim()
-        .replace(/[^0-9]/g, "");
-
-      // Create a new Article using the `result` object built from scraping
-      db.Article.create(result).catch(function(err) {
-        // If an error occurred, send it to the client
-        return res.json(err);
-      });
-    });
-
-    // If we were able to successfully scrape and save an Article, send a message to the client
-    res.send("Scrape Complete");
-  });
-});
-
-// Route for getting all Articles from the db
-app.get("/articles", function(req, res) {
-  // Grab every document in the Articles collection
-  db.Article.find({})
-    .then(function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      res.json(dbArticle);
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-});
-
 // Route for getting all Articles from the db
 app.get("/ads", function(req, res) {
   // Grab every document in the Articles collection
   db.Ads.find({})
     .then(function(dbArticle) {
       // If we were able to successfully find Articles, send them back to the client
-      console.log(dbArticle.length);
-      res.json(dbArticle);
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-});
-
-// Route for grabbing a specific Article by id, populate it with it's note
-app.get("/articles/:id", function(req, res) {
-  // Using the id passed in the id parameter, prepare a query that finds the matching one in our db...
-  db.Article.findOne({ _id: req.params.id })
-    // ..and populate all of the notes associated with it
-    .populate("note")
-    .then(function(dbArticle) {
-      // If we were able to successfully find an Article with the given id, send it back to the client
-      res.json(dbArticle);
+      res.json(dbArticle.length);
     })
     .catch(function(err) {
       // If an error occurred, send it to the client
@@ -289,12 +326,40 @@ app.post("/articles/:id", function(req, res) {
 });
 
 // Route for deleting all Articles from the db
-app.get("/clear", function(req, res) {
+app.get("/clearFeed", function(req, res) {
   // Grab every document in the Articles collection
-  db.Article.remove({})
+  db.Feed.remove({})
     .then(function(dbArticle) {
       // If we were able to successfully find Articles, send them back to the client
       res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for deleting all Articles from the db
+app.get("/clearAds", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/feed", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle.length);
     })
     .catch(function(err) {
       // If an error occurred, send it to the client
@@ -332,48 +397,6 @@ app.get("/crawl", function(req, res) {
   });
 });
 
-// Route for deleting all Articles from the db
-app.get("/clearCrawl", function(req, res) {
-  // Grab every document in the Articles collection
-  db.Feed.remove({})
-    .then(function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      res.json(dbArticle);
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-});
-
-// Route for deleting all Articles from the db
-app.get("/clearAds", function(req, res) {
-  // Grab every document in the Articles collection
-  db.Ads.remove({})
-    .then(function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      res.json(dbArticle);
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-});
-
-// Route for getting all Articles from the db
-app.get("/feed", function(req, res) {
-  // Grab every document in the Articles collection
-  db.Feed.find({})
-    .then(function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      res.json(dbArticle);
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-});
-
 // Route for getting all Articles from the db
 app.get("/scrapeAds", function(req, res) {
   // Grab every document in the Articles collection
@@ -383,101 +406,11 @@ app.get("/scrapeAds", function(req, res) {
 
       dbArticle.forEach(function(i, element) {
         // result.push(i.link);
-        axios.get(i.link).then(function(response) {
-          // Then, we load that into cheerio and save it to $ for a shorthand selector
-          var $ = cheerio.load(response.data);
-
-          // Save an empty result object
-          var result = {};
-
-          // crawled variables
-          var title = $(".price-tag > h1").text();
-          var price = $(".price-tag > h2")
-            .text()
-            .replace(/[^0-9.-]+/g, "");
-          // Add Formatted price to Title
-          title +=
-            " - $" + price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-
-          var ymm = title.split(" "); // break Title into array of text
-          var year = ymm[0];
-          var make = ymm[1];
-          var modelIndex = title.indexOf(make) + make.length + 1;
-          var model = title.substring(modelIndex).replace(/\$.*/g, "");
-
-          var location = $(".per-detail > ul > li")[0]
-            .children[0].data.replace("Location: ", "")
-            .replace(/\s+/g, "")
-            .replace(".", ". ");
-
-          var contact = $(".contact_details")
-            .text()
-            .replace(/[^0-9]+/g, "")
-            .substring(0, 11);
-
-          // Get Features for description
-          var features = [];
-
-          features.push($(".vehicle-description").text());
-
-          $(".per-detail > ul > li").each(function(i) {
-            features.push($(this).text());
-          });
-
-          features.push($(".contact_details").text());
-
-          var description = "";
-          features.forEach(function(element) {
-            description += element.toString();
-            description += "\n";
-            // description = +"\n Sourced from http://autoadsja.com";
-          });
-
-          // Get Images
-          var imgs = [];
-          $(".product-images > .prod-box > a").each(function(i) {
-            imgs.push($(this).attr("href"));
-          });
-
-          // Update Results object
-          result.title = title;
-          result.price = price;
-          result.year = year;
-          result.make = make;
-          result.model = model;
-          result.parish = location;
-          result.contactNumber = contact;
-          result.description = description;
-          result.imgs = imgs;
-          result.price = price;
-
-          // Create a new Article using the `result` object built from scraping
-          db.Ads.create(result).catch(function(err) {
-            // If an error occurred, send it to the client
-            // return res.json(err);
-            console.log(err);
-          });
-        });
+        scrapeAds(i.link);
       });
 
       // Send Scraped result to the front
       res.send("Scrape Successful");
-    })
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      res.json(err);
-    });
-});
-
-// Route for getting all Articles from the db
-app.get("/scrapImgs", function(req, res) {
-  // Grab every document in the Articles collection
-  db.Ads.find({})
-    .then(function(dbArticle) {
-      // If we were able to successfully find Articles, send them back to the client
-      // res.json(dbArticle);
-      dbArticle.slice(-2).forEach(function(i, element) {});
-      res.send("imported img line 424");
     })
     .catch(function(err) {
       // If an error occurred, send it to the client

@@ -206,7 +206,8 @@ function scrapeAds(link) {
     result.price = price;
 
     // Create a new Article using the `result` object built from scraping
-    db.Ads.create(result).catch(function(err) {
+    db.Ads.create(result)
+    .catch(function(err) {
       // If an error occurred, send it to the client
       console.log(err);
     });
@@ -219,8 +220,6 @@ function checkFeed(result) {
     } else {
       db.Feed.create(result)
         .then(function(feedItem) {
-          console.log("Name added");
-          console.log(feedItem);
           scrapeAds(feedItem.link);
         })
         .catch(function(err) {

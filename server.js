@@ -207,10 +207,13 @@ function scrapeAds(link) {
 
     // Create a new Article using the `result` object built from scraping
     db.Ads.create(result)
-    .catch(function(err) {
-      // If an error occurred, send it to the client
-      console.log(err);
-    });
+      .then(function(ad) {
+        postItem(ad);
+      })
+      .catch(function(err) {
+        // If an error occurred, send it to the client
+        console.log(err);
+      });
   });
 }
 

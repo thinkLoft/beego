@@ -234,7 +234,7 @@ function checkFeed(result) {
   });
 }
 
-const job = new CronJob("0 */1 * * * *", function() {
+const job = new CronJob("0 */30 * * * *", function() {
   axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data, { xmlMode: true });

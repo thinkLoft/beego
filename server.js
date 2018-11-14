@@ -47,7 +47,7 @@ async function postItem(i) {
     username: "automater",
     password: "llipDR3x8S2DUHAnyo"
   };
-
+  await console.log(i.title);
   const makeSub = i.make.substring(0, 4);
 
   const browser = await puppeteer.launch({
@@ -75,18 +75,15 @@ async function postItem(i) {
   await page.waitForNavigation();
   await page.click(".upload-flash-bypass > a");
 
-  await console.log(makeSub);
   await page.type("#cp_make", makeSub);
   await page.evaluate(i => {
     $("#cp_contact_number").val(i.contactNumber);
-    $("#cp_price").val(i.price);
     $("#cp_price").val(i.price);
     $("#cp_year").val(i.year);
     $("#cp_model").val(i.model);
     $("#cp_region").val(i.parish);
     $("#post_title").val(i.title);
     $("#post_content").val(i.description);
-    // console.log(i.description);
   }, i);
 
   var count = 1;
@@ -94,21 +91,18 @@ async function postItem(i) {
   // Run command for each image
   async function processImgs(i) {
     for (let e of i.imgs) {
-      // console.log(e);
       var uploadbtn = "#upload_" + count + " > input";
       var filename = "images/";
       filename += e.replace("https://www.autoadsja.com/vehicleimages/", "");
       await download(e, filename, async function() {});
 
       const fileInput = await page.$(uploadbtn);
-      // await console.log(uploadbtn);
       await fileInput.uploadFile(filename);
 
       count++;
     }
   }
   await processImgs(i);
-  // await page.waitForNavigation(); //TEMP
   await setTimeout(async function() {
     await page.evaluate(() => {
       $("form#mainform").submit();
@@ -116,16 +110,12 @@ async function postItem(i) {
   }, 3000);
 
   await page.waitForNavigation({});
-  // await page.evaluate(() => {
-  //   $("form#mainform").submit();
-  // });
-  // await page.waitForNavigation(); //TEMP
-  // await page.goto("https://doubleupja.com/create-listing/");
   await page.evaluate(() => {
     $("form#mainform").submit();
   });
   await page.waitForNavigation();
   await browser.close();
+  console.log("ad post confirmed");
 }
 
 // Image Downloader
@@ -184,7 +174,6 @@ async function scrapeAds(link) {
     features.forEach(function(element) {
       description += element.toString();
       description += "\n";
-      // description = +"\n Sourced from http://autoadsja.com";
     });
 
     // Get Images
@@ -227,8 +216,6 @@ async function checkFeed(result) {
           await scrapeAds(feedItem.link);
         })
         .catch(function(err) {
-          // If an error occurred, send it to the client
-          // return res.json(err);
           console.log(err);
         });
     }
@@ -401,10 +388,7 @@ app.get("/scrapeAds", function(req, res) {
   // Grab every document in the Articles collection
   db.Feed.find({})
     .then(function(dbArticle) {
-      // var result = [];
-
       dbArticle.forEach(function(i, element) {
-        // result.push(i.link);
         scrapeAds(i.link);
       });
 

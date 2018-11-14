@@ -128,7 +128,7 @@ function download(uri, filename, callback) {
 }
 
 async function scrapeAds(link) {
-  await axios.get(link).then(function(response) {
+  await axios.get(link).then(async function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data);
 
@@ -195,8 +195,8 @@ async function scrapeAds(link) {
     result.price = price;
 
     // Create a new Article using the `result` object built from scraping
-    db.Ads.create(result)
-      .then(function(ad) {
+    await db.Ads.create(result)
+      .then(async function(ad) {
         postItem(ad);
       })
       .catch(function(err) {
@@ -207,13 +207,13 @@ async function scrapeAds(link) {
 }
 
 async function checkFeed(result) {
-  await db.Feed.find({ link: result.link }, function(err, docs) {
+  await db.Feed.find({ link: result.link }, async function(err, docs) {
     if (docs.length) {
     } else {
       console.log("Ad Found!");
-      db.Feed.create(result)
-        .then(async function(feedItem) {
-          await scrapeAds(feedItem.link);
+      await db.Feed.create(result)
+        .then(function(feedItem) {
+          scrapeAds(feedItem.link);
         })
         .catch(function(err) {
           console.log(err);
@@ -222,7 +222,7 @@ async function checkFeed(result) {
   });
 }
 
-const job = new CronJob("0 */30 * * * *", function() {
+const job = new CronJob("0 */10 * * * *", function() {
   axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data, { xmlMode: true });

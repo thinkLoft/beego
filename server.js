@@ -17,7 +17,7 @@ const puppeteer = require("puppeteer");
 // Require all models
 var db = require("./models");
 
-var PORT = 3000;
+var PORT = 7000;
 
 // Initialize Express
 var app = express();
@@ -57,7 +57,7 @@ async function postItem(i) {
   });
 
   const page = await browser.newPage();
-  page.setDefaultNavigationTimeout(60000);
+  page.setDefaultNavigationTimeout(240000);
 
   await page.goto("https://doubleupja.com/create-listing/");
   await page.evaluate(user => {
@@ -137,8 +137,8 @@ function download(uri, filename, callback) {
   });
 }
 
-function scrapeAds(link) {
-  axios.get(link).then(function(response) {
+async function scrapeAds(link) {
+  await axios.get(link).then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data);
 
@@ -217,13 +217,14 @@ function scrapeAds(link) {
   });
 }
 
-function checkFeed(result) {
-  db.Feed.find({ link: result.link }, function(err, docs) {
+async function checkFeed(result) {
+  await db.Feed.find({ link: result.link }, function(err, docs) {
     if (docs.length) {
     } else {
+      console.log("Ad Found!");
       db.Feed.create(result)
-        .then(function(feedItem) {
-          scrapeAds(feedItem.link);
+        .then(async function(feedItem) {
+          await scrapeAds(feedItem.link);
         })
         .catch(function(err) {
           // If an error occurred, send it to the client
@@ -239,7 +240,7 @@ const job = new CronJob("0 */30 * * * *", function() {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data, { xmlMode: true });
 
-    $("item").each(function(i, element) {
+    $("item").each(async function(i, element) {
       var result = {};
 
       // Add the text and href of every link, and save them as properties of the result object
@@ -253,14 +254,10 @@ const job = new CronJob("0 */30 * * * *", function() {
         .children("description")
         .text();
 
-      checkFeed(result, function(res) {
-        if (res) {
-          count++;
-        }
-      });
+      await checkFeed(result);
     });
   });
-  console.log("checked for ads");
+  console.log("ads Checked");
 });
 
 // Start Cron Job Automation

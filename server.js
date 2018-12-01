@@ -51,7 +51,7 @@ async function postItem(i) {
   const makeSub = i.make.substring(0, 4);
 
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     timeout: 150000,
     networkIdleTimout: 150000
   });
@@ -102,12 +102,12 @@ async function postItem(i) {
       count++;
     }
   }
-  await processImgs(i);
-  await setTimeout(async function() {
-    await page.evaluate(() => {
-      $("form#mainform").submit();
-    });
-  }, 3000);
+  // await processImgs(i);  // Turn off process imageds TEMP======================
+  // await setTimeout(async function() {
+  await page.evaluate(() => {
+    $("form#mainform").submit();
+  });
+  // }, 3000);
 
   await page.waitForNavigation({});
   await page.evaluate(() => {
@@ -193,6 +193,7 @@ async function scrapeAds(link) {
     result.description = description;
     result.imgs = imgs;
     result.price = price;
+    result.posted = false;
 
     // Create a new Article using the `result` object built from scraping
     await db.Ads.create(result)
@@ -222,7 +223,7 @@ async function checkFeed(result) {
   });
 }
 
-const job = new CronJob("0 */10 * * * *", function() {
+const job = new CronJob("0 */60 * * * *", function() {
   axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
     var $ = cheerio.load(response.data, { xmlMode: true });
@@ -389,10 +390,10 @@ app.get("/scrapeAds", function(req, res) {
   db.Feed.find({})
     .then(function(dbArticle) {
       dbArticle.forEach(function(i, element) {
-        scrapeAds(i.link);
+        // scrapeAds(i.link); ===============================================Temp Change
       });
-
       // Send Scraped result to the front
+      scrapeAds("http://www.autoadsja.com/5THV"); // ===============================================Temp Change
       res.send("Scrape Successful");
     })
     .catch(function(err) {

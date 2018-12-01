@@ -45,6 +45,10 @@ var AdsSchema = new Schema({
   parish: {
     type: String,
     require: true
+  },
+  posted: {
+    type: Boolean,
+    require: false
   }
 });
 

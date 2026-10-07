@@ -7,6 +7,11 @@ var mongoose = require("mongoose");
 // It works on the client and on the server
 var axios = require("axios");
 var cheerio = require("cheerio");
+var fs = require("fs");
+var request = require("request");
+
+// Our Puppeteer
+const puppeteer = require("puppeteer");
 
 // Require all models
 var db = require("./models");
@@ -35,11 +40,133 @@ mongoose.connect(
   { useNewUrlParser: true }
 );
 
+// Load Puppeteer browser
+async function postItem(i) {
+  var user = {
+    username: "automater",
+    password: "llipDR3x8S2DUHAnyo"
+  };
+
+  const makeSub = i.make.substring(0, 4);
+
+  const browser = await puppeteer.launch({
+    headless: false,
+    timeout: 150000,
+    networkIdleTimout: 150000
+  });
+
+  const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(60000);
+
+  await page.goto("https://doubleupja.com/create-listing/");
+  await page.evaluate(user => {
+    $("#login_username").val(user.username);
+    $("#login_password").val(user.password);
+    $("#login").click();
+  }, user);
+  await page.waitForNavigation();
+
+  await page.focus("#ad_cat_id");
+  await page.keyboard.press("ArrowDown", { delay: 50 });
+  await page.evaluate(() => {
+    $("form#mainform").submit();
+  });
+  await page.waitForNavigation();
+  await page.click(".upload-flash-bypass > a");
+
+  await console.log(makeSub);
+  await page.type("#cp_make", makeSub);
+  await page.evaluate(i => {
+    $("#cp_contact_number").val(i.contactNumber);
+    $("#cp_price").val(i.price);
+    $("#cp_price").val(i.price);
+    $("#cp_year").val(i.year);
+    $("#cp_model").val(i.model);
+    $("#cp_region").val(i.parish);
+    $("#post_title").val(i.title);
+    $("#post_content").val(i.description);
+  }, i);
+
+  var count = 1;
+
+  // Run command for each image
+  async function processImgs(i) {
+    for (let e of i.imgs) {
+      console.log(e);
+      var uploadbtn = "#upload_" + count + " > input";
+      var filename = "images/";
+      filename += e.replace("https://www.autoadsja.com/vehicleimages/", "");
+      await download(e, filename, async function() {});
+
+      const fileInput = await page.$(uploadbtn);
+      await console.log(uploadbtn);
+      await fileInput.uploadFile(filename);
+
+      count++;
+    }
+  }
+  await processImgs(i);
+  // await page.waitForNavigation(); //TEMP
+  await setTimeout(async function() {
+    await page.evaluate(() => {
+      $("form#mainform").submit();
+    });
+  }, 3000);
+
+  await page.waitForNavigation({});
+  // await page.evaluate(() => {
+  //   $("form#mainform").submit();
+  // });
+  // await page.waitForNavigation(); //TEMP
+  // await page.goto("https://doubleupja.com/create-listing/");
+  await page.evaluate(() => {
+    $("form#mainform").submit();
+  });
+  await page.waitForNavigation();
+  await browser.close();
+}
+
+// Image Downloader
+function download(uri, filename, callback) {
+  request.head(uri, function(err, res, body) {
+    request(uri)
+      .pipe(fs.createWriteStream(filename))
+      .on("close", callback);
+  });
+}
+
 // Routes
+
+// Route for deleting all Articles from the db
+app.get("/postItem", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(async function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      // res.json(dbArticle);
+      // await postItem(dbArticle[54]);
+      // await postItem(dbArticle[55]);
+      // await postItem(dbArticle[56]);
+      // await postItem(dbArticle[57]);
+      // await postItem(dbArticle[58]);
+      // await postItem(dbArticle[59]);
+      // await postItem(dbArticle[60]);
+      // await postItem(dbArticle[61]);
+      // await postItem(dbArticle[62]);
+      // await postItem(dbArticle[63]);
+      for (let i of dbArticle) {
+        await postItem(i);
+      }
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      console.log(err);
+    });
+  res.send("FinishedPosting");
+});
 
 // A GET route for scraping the echoJS website
 app.get("/scrape", function(req, res) {
-  console.log("Scrape!");
   // First, we grab the body of the html with axios
   axios.get("https://www.autoadsja.com/search.asp").then(function(response) {
     // Then, we load that into cheerio and save it to $ for a shorthand selector
@@ -62,17 +189,18 @@ app.get("/scrape", function(req, res) {
         .children("a")
         .children("img")
         .attr("src");
-      console.log(result.title);
-      // // Create a new Article using the `result` object built from scraping
-      // db.Article.create(result)
-      //   .then(function(dbArticle) {
-      //     // View the added result in the console
-      //     console.log(dbArticle);
-      //   })
-      //   .catch(function(err) {
-      //     // If an error occurred, send it to the client
-      //     return res.json(err);
-      //   });
+      result.price = $(this)
+        .children(".description")
+        .children("span")
+        .text()
+        .trim()
+        .replace(/[^0-9]/g, "");
+
+      // Create a new Article using the `result` object built from scraping
+      db.Article.create(result).catch(function(err) {
+        // If an error occurred, send it to the client
+        return res.json(err);
+      });
     });
 
     // If we were able to successfully scrape and save an Article, send a message to the client
@@ -86,6 +214,21 @@ app.get("/articles", function(req, res) {
   db.Article.find({})
     .then(function(dbArticle) {
       // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/ads", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      console.log(dbArticle.length);
       res.json(dbArticle);
     })
     .catch(function(err) {
@@ -127,6 +270,207 @@ app.post("/articles/:id", function(req, res) {
     .then(function(dbArticle) {
       // If we were able to successfully update an Article, send it back to the client
       res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for deleting all Articles from the db
+app.get("/clear", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Article.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// // Route for getting all Articles from the db
+app.get("/crawl", function(req, res) {
+  axios.get("https://www.autoadsja.com/rss.asp").then(function(response) {
+    // Then, we load that into cheerio and save it to $ for a shorthand selector
+    var $ = cheerio.load(response.data, { xmlMode: true });
+
+    $("item").each(function(i, element) {
+      // Save an empty result object
+      var result = {};
+
+      // Add the text and href of every link, and save them as properties of the result object
+      result.link = $(this)
+        .children("link")
+        .text();
+      result.title = $(this)
+        .children("title")
+        .text();
+      result.img = $(this)
+        .children("description")
+        .text();
+      // Create a new CRAWLER LIST using the `result` object built from scraping
+      db.Feed.create(result)
+        .then(function(dbArticle) {
+          // View the added result in the console
+          console.log(dbArticle);
+        })
+        .catch(function(err) {
+          // If an error occurred, send it to the client
+          return res.json(err);
+        });
+    });
+  });
+});
+
+// Route for deleting all Articles from the db
+app.get("/clearCrawl", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for deleting all Articles from the db
+app.get("/clearAds", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.remove({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/feed", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      res.json(dbArticle);
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/scrapeAds", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Feed.find({})
+    .then(function(dbArticle) {
+      // var result = [];
+
+      dbArticle.slice(-100).forEach(function(i, element) {
+        // result.push(i.link);
+        axios.get(i.link).then(function(response) {
+          // Then, we load that into cheerio and save it to $ for a shorthand selector
+          var $ = cheerio.load(response.data);
+
+          // Save an empty result object
+          var result = {};
+
+          // crawled variables
+          var title = $(".price-tag > h1").text();
+          var price = $(".price-tag > h2")
+            .text()
+            .replace(/[^0-9.-]+/g, "");
+          // Add Formatted price to Title
+          title +=
+            " - $" + price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+          var ymm = title.split(" "); // break Title into array of text
+          var year = ymm[0];
+          var make = ymm[1];
+          var modelIndex = title.indexOf(make) + make.length + 1;
+          var model = title.substring(modelIndex).replace(/\$.*/g, "");
+
+          var location = $(".per-detail > ul > li")[0]
+            .children[0].data.replace("Location: ", "")
+            .replace(/\s+/g, "")
+            .replace(".", ". ");
+
+          var contact = $(".contact_details")
+            .text()
+            .replace(/[^0-9]+/g, "")
+            .substring(0, 11);
+
+          // Get Features for description
+          var features = [];
+
+          features.push($(".vehicle-description").text());
+
+          $(".per-detail > ul > li").each(function(i) {
+            features.push($(this).text());
+          });
+
+          features.push($(".contact_details").text());
+
+          var description = "";
+          features.forEach(function(element) {
+            description += element.toString();
+            description += "\n";
+            description = +"\n Sourced from http://autoadsja.com";
+          });
+
+          // Get Images
+          var imgs = [];
+          $(".product-images > .prod-box > a").each(function(i) {
+            imgs.push($(this).attr("href"));
+          });
+
+          // Update Results object
+          result.title = title;
+          result.price = price;
+          result.year = year;
+          result.make = make;
+          result.model = model;
+          result.parish = location;
+          result.contactNumber = contact;
+          result.description = description;
+          result.imgs = imgs;
+          result.price = price;
+
+          // Create a new Article using the `result` object built from scraping
+          db.Ads.create(result).catch(function(err) {
+            // If an error occurred, send it to the client
+            // return res.json(err);
+            console.log(err);
+          });
+        });
+      });
+
+      // Send Scraped result to the front
+      res.send("Scrape Successful");
+    })
+    .catch(function(err) {
+      // If an error occurred, send it to the client
+      res.json(err);
+    });
+});
+
+// Route for getting all Articles from the db
+app.get("/scrapImgs", function(req, res) {
+  // Grab every document in the Articles collection
+  db.Ads.find({})
+    .then(function(dbArticle) {
+      // If we were able to successfully find Articles, send them back to the client
+      // res.json(dbArticle);
+      dbArticle.slice(-2).forEach(function(i, element) {});
+      res.send("imported img line 424");
     })
     .catch(function(err) {
       // If an error occurred, send it to the client

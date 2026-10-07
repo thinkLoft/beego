@@ -2,5 +2,7 @@
 
 module.exports = {
   Article: require("./Article"),
-  Note: require("./Note")
+  Note: require("./Note"),
+  Feed: require("./feed"),
+  Ads: require("./Ads")
 };
